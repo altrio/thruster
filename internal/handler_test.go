@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -261,6 +262,31 @@ func TestHandlerXForwardedHeadersDropsExistingHeadersWhenForwardingNotEnabled(t 
 	r.Header.Set("X-Forwarded-Host", "other.example.com")
 	r.RemoteAddr = "1.2.3.4:1234"
 	h.ServeHTTP(w, r)
+}
+
+func TestHandlerSetsXRequestStartHeaderWhenProxying(t *testing.T) {
+	var capturedHeader string
+	beforeRequest := time.Now()
+	
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedHeader = r.Header.Get("X-Request-Start")
+		assert.NotEmpty(t, capturedHeader)
+	}))
+	defer upstream.Close()
+
+	h := NewHandler(handlerOptions(upstream.URL))
+
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/", nil)
+	h.ServeHTTP(w, r)
+	
+	// Verify the header is a valid microsecond timestamp
+	timestamp, err := strconv.ParseInt(capturedHeader, 10, 64)
+	assert.NoError(t, err)
+	
+	// Verify it's a reasonable timestamp (after test start, within last second)
+	assert.Greater(t, timestamp, beforeRequest.UnixMicro())
+	assert.Less(t, timestamp, time.Now().UnixMicro())
 }
 
 // Helpers

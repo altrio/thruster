@@ -7,6 +7,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strconv"
+	"time"
 )
 
 func NewProxyHandler(targetUrl *url.URL, badGatewayPage string, forwardHeaders bool) http.Handler {
@@ -15,6 +17,7 @@ func NewProxyHandler(targetUrl *url.URL, badGatewayPage string, forwardHeaders b
 			r.SetURL(targetUrl)
 			r.Out.Host = r.In.Host
 			setXForwarded(r, forwardHeaders)
+			setXRequestStart(r)
 		},
 		ErrorHandler: ProxyErrorHandler(badGatewayPage),
 		Transport:    createProxyTransport(),
@@ -62,6 +65,10 @@ func setXForwarded(r *httputil.ProxyRequest, forwardHeaders bool) {
 			r.Out.Header.Set("X-Forwarded-Proto", r.In.Header.Get("X-Forwarded-Proto"))
 		}
 	}
+}
+
+func setXRequestStart(r *httputil.ProxyRequest) {
+	r.Out.Header.Set("X-Request-Start", strconv.FormatInt(time.Now().UnixMicro(), 10))
 }
 
 func isRequestEntityTooLarge(err error) bool {
